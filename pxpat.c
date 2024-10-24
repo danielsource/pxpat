@@ -15,15 +15,24 @@ struct pattern;
 
 typedef unsigned char pat_getpx_func(struct pattern *, unsigned int); /* returns a color index from Pattern.rgb */
 
+enum pat_flags {
+    PXPAT_F_NONE = 0,
+    PXPAT_F_TILE = 1
+};
+
 struct pattern {
     unsigned int w, h;
     unsigned char *data;
     unsigned long *rgb; /* for hex triplets (each using 3 bytes out of 4 bytes~) */
     unsigned int nrgb;
     pat_getpx_func *getpx;
+    enum pat_flags f;
 };
 
 unsigned char pat_getpx(struct pattern *pat, unsigned int pos);
+unsigned char pat_getpx_simple_rand(struct pattern *pat, unsigned int pos);
+unsigned char pat_getpx_grid(struct pattern *pat, unsigned int pos);
+unsigned char pat_getpx_cycle_colors(struct pattern *pat, unsigned int pos);
 unsigned char pat_getpx_checkpat(struct pattern *pat, unsigned int pos);
 unsigned char pat_getpx_main_diag(struct pattern *pat, unsigned int pos);
 
@@ -33,6 +42,9 @@ static struct {
     pat_getpx_func *getpx;
 } pat_getpx_funcs[] = {
     PAT_GETPX_FUNC(pat_getpx),
+    PAT_GETPX_FUNC(pat_getpx_simple_rand),
+    PAT_GETPX_FUNC(pat_getpx_grid),
+    PAT_GETPX_FUNC(pat_getpx_cycle_colors),
     PAT_GETPX_FUNC(pat_getpx_checkpat),
     PAT_GETPX_FUNC(pat_getpx_main_diag),
     {NULL, NULL}
@@ -88,13 +100,54 @@ char *getenv_alloc(const char *name) {
     return s;
 }
 
-inline unsigned char pat_getpx_simple_rand(const struct pattern *pat, const unsigned int pos) {
+unsigned char pat_getpx(struct pattern *pat, unsigned int pos) {
+    return pat_getpx_simple_rand(pat, pos);
+}
+
+
+unsigned char pat_getpx_simple_rand(struct pattern *pat, unsigned int pos) {
     UNUSED(pos);
     return (unsigned char)(rand() % pat->nrgb);
 }
 
-unsigned char pat_getpx(struct pattern *pat, unsigned int pos) {
-    return pat_getpx_simple_rand(pat, pos);
+static unsigned char pat_getpx_grid_(unsigned int x,
+                                     unsigned int y,
+                                     unsigned int h,
+                                     unsigned char bg, /* background color */
+                                     unsigned char fg, /* foreground color */
+                                     unsigned char vx  /* vertex color */) {
+    static const unsigned int rows = 32;
+    const unsigned int cellsz = h/rows;
+
+    if (cellsz == 0)
+        return bg;
+    x %= cellsz;
+    y %= cellsz;
+    if ((x == 1 && y == 0) ||
+        (x == 0 && y == 1) ||
+        (x == 1 && y == 1) ||
+        (x == 2 && y == 1) ||
+        (x == 1 && y == 2))
+        return vx;
+    if (x == 1 || y == 1)
+        return fg;
+    return bg;
+}
+
+unsigned char pat_getpx_grid(struct pattern *pat, unsigned int pos) {
+    unsigned int x, y;
+
+    x = pos % pat->w;
+    y = pos / pat->w;
+    if (pat->nrgb < 2)
+        return pat_getpx_grid_(x, y, pat->h, 0, 0, 0);
+    if (pat->nrgb == 2)
+        return pat_getpx_grid_(x, y, pat->h, 0, 1, 1);
+    return pat_getpx_grid_(x, y, pat->h, 0, 1, 2);
+}
+
+unsigned char pat_getpx_cycle_colors(struct pattern *pat, unsigned int pos) {
+    return (unsigned char)(pos % pat->nrgb);
 }
 
 unsigned char pat_getpx_checkpat(struct pattern *pat, unsigned int pos) {
@@ -136,20 +189,20 @@ void pat_write_tga(struct pattern pat, FILE *fp, unsigned int pxsz) {
 
     /* TGA data type 1: color-mapped images */
     unsigned char header[18] = {
-        /* 0*/ 0,                /* image identification field (IIF) size */
-        /* 1*/ 1,                /* color map type */
-        /* 2*/ 1,                /* image type */
-        /* 3*/ 0, 0,             /* color map origin (lo-hi) */
-        /* 5*/ 0, 0,             /* color map length (lo-hi) */
-        /* 7*/ 24,               /* color map entry size */
-        /* 8*/ 0, 0, 0, 0,       /* image x,y origin (lo-hi) */
-        /*12*/ 0, 0, 0, 0,       /* image width,height (lo-hi) */
-        /*16*/ 8,                /* image pixel size */
-        /*17*/ 0,                /* image descriptor byte */
+        /* 0*/ 0,          /* image identification field (IIF) size */
+        /* 1*/ 1,          /* color map type */
+        /* 2*/ 1,          /* image type */
+        /* 3*/ 0, 0,       /* color map origin (lo-hi) */
+        /* 5*/ 0, 0,       /* color map length (lo-hi) */
+        /* 7*/ 24,         /* color map entry size */
+        /* 8*/ 0, 0, 0, 0, /* image x,y origin (lo-hi) */
+        /*12*/ 0, 0, 0, 0, /* image width,height (lo-hi) */
+        /*16*/ 8,          /* image pixel size */
+        /*17*/ 0,          /* image descriptor byte */
     };
 
     assert(fp);
-    assert(pxsz >= 1);          /* TODO: pxsz support */
+    assert(pxsz >= 1); /* TODO: pxsz support */
     assert(pat.rgb);
     assert(pat.nrgb <= TGA_MAP_ENTRIES_MAX);
 
@@ -188,7 +241,7 @@ pat_getpx_func *pat_get_getpx_by_name(const char *name) {
 int main(int argc, char *argv[]) {
     struct pattern pat;
     unsigned int pxsz;
-    char *env_seed, *env_getpx;
+    char *env_seed = NULL, *env_getpx = NULL;
     unsigned int seed;
     unsigned int i;
 
@@ -201,7 +254,8 @@ int main(int argc, char *argv[]) {
         die("Usage: %s width height pixel_size 0xRRGGBB 0xRRGGBB... > output_file.tga\n"
             "Environment variables:\n"
             "  PXPAT_SEED (to be passed to srand)\n"
-	    "  PXPAT_GETPX (default: pat_getpx)", arg0);
+            "  PXPAT_GETPX (default: pat_getpx)", arg0);
+    /* TODO: PXPAT_TILE */
     env_seed = getenv_alloc("PXPAT_SEED");
     env_getpx = getenv_alloc("PXPAT_GETPX");
     seed = env_seed ? strtoul(env_seed, NULL, 10) : (unsigned int)time(NULL);
@@ -226,6 +280,8 @@ int main(int argc, char *argv[]) {
         log_debug("getpx=\"%s\" ", env_getpx);
     log_debug("seed=%u w=%d h=%d pxsz=%d ", seed, pat.w, pat.h, pxsz);
     for (i = 0; i < pat.nrgb; ++i) {
+        if (argv[i][0] == '#')
+            ++argv[i];
         pat.rgb[i] = strtoul(argv[i], NULL, 16);
         log_debug("rgb[%d]=%06lx ", i, pat.rgb[i]);
     }
