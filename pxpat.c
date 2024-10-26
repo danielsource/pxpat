@@ -52,18 +52,6 @@ static struct {
 
 static const char *arg0;
 
-void log_debug(const char *fmt, ...) {
-#ifndef NDEBUG
-    va_list ap;
-
-    va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
-    va_end(ap);
-#else
-    UNUSED(fmt);
-#endif
-}
-
 void die(const char *fmt, ...) {
     va_list ap;
 
@@ -245,10 +233,6 @@ int main(int argc, char *argv[]) {
     unsigned int seed;
     unsigned int i;
 
-#ifndef NDEBUG
-    FILE *fp;
-#endif
-
     arg0 = argv[0];
     if (argc < 5)
         die("Usage: %s width height pixel_size 0xRRGGBB 0xRRGGBB... > output_file.tga\n"
@@ -276,25 +260,13 @@ int main(int argc, char *argv[]) {
     } else {
         pat.getpx = pat_getpx;
     }
-    if (pat.getpx != pat_getpx)
-        log_debug("getpx=\"%s\" ", env_getpx);
-    log_debug("seed=%u w=%d h=%d pxsz=%d ", seed, pat.w, pat.h, pxsz);
     for (i = 0; i < pat.nrgb; ++i) {
         if (argv[i][0] == '#')
             ++argv[i];
         pat.rgb[i] = strtoul(argv[i], NULL, 16);
-        log_debug("rgb[%d]=%06lx ", i, pat.rgb[i]);
     }
-    log_debug("\n");
     pat_gen(&pat);
-#ifndef NDEBUG
-    if (!(fp = fopen("build/debug.tga", "w")))
-        die("%s:", "build/debug.tga");
-    pat_write_tga(pat, fp, pxsz);
-    fclose(fp);
-#else
     pat_write_tga(pat, stdout, pxsz);
-#endif
     free(pat.rgb);
     free(pat.data);
     free(env_seed);
