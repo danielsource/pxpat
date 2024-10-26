@@ -1,40 +1,10 @@
 #include <assert.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
-#define UNUSED(par) (void)(par)
-
-#define EXIT_INVALID_PARAMETER (2)
-
-#define TGA_MAP_ENTRIES_MAX (255)
-
-struct pattern;
-
-typedef unsigned char pat_getpx_func(struct pattern *, unsigned int); /* returns a color index from Pattern.rgb */
-
-enum pat_flags {
-    PXPAT_F_NONE = 0,
-    PXPAT_F_TILE = 1
-};
-
-struct pattern {
-    unsigned int w, h;
-    unsigned char *data;
-    unsigned long *rgb; /* for hex triplets (each using 3 bytes out of 4 bytes~) */
-    unsigned int nrgb;
-    pat_getpx_func *getpx;
-    enum pat_flags f;
-};
-
-unsigned char pat_getpx(struct pattern *pat, unsigned int pos);
-unsigned char pat_getpx_simple_rand(struct pattern *pat, unsigned int pos);
-unsigned char pat_getpx_grid(struct pattern *pat, unsigned int pos);
-unsigned char pat_getpx_cycle_colors(struct pattern *pat, unsigned int pos);
-unsigned char pat_getpx_checkpat(struct pattern *pat, unsigned int pos);
-unsigned char pat_getpx_main_diag(struct pattern *pat, unsigned int pos);
+#include "./pxpat.h"
+#include "./pxpat_util.h"
 
 #define PAT_GETPX_FUNC(name) {#name, name}
 static struct {
@@ -49,44 +19,6 @@ static struct {
     PAT_GETPX_FUNC(pat_getpx_main_diag),
     {NULL, NULL}
 };
-
-static const char *arg0;
-
-void die(const char *fmt, ...) {
-    va_list ap;
-
-    va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
-    va_end(ap);
-    if (fmt[0] && fmt[strlen(fmt)-1] == ':') {
-        fputc(' ', stderr);
-        perror(NULL);
-    } else {
-        fputc('\n', stderr);
-    }
-    exit(EXIT_FAILURE);
-}
-
-void *ecalloc(size_t nmemb, size_t size) {
-    void *p;
-
-    if (!(p = calloc(nmemb, size)))
-        die("calloc:");
-    return p;
-}
-
-char *getenv_alloc(const char *name) {
-    char *s, *var;
-    size_t len;
-
-    var = getenv(name);
-    if (!var)
-        return NULL;
-    len = strlen(var);
-    s = ecalloc(len+1, 1);
-    memcpy(s, var, len);
-    return s;
-}
 
 unsigned char pat_getpx(struct pattern *pat, unsigned int pos) {
     return pat_getpx_simple_rand(pat, pos);
@@ -192,7 +124,7 @@ void pat_write_tga(struct pattern pat, FILE *fp, unsigned int pxsz) {
     assert(fp);
     assert(pxsz >= 1); /* TODO: pxsz support */
     assert(pat.rgb);
-    assert(pat.nrgb <= TGA_MAP_ENTRIES_MAX);
+    assert(pat.nrgb <= PXPAT_TGA_MAP_ENTRIES_MAX);
 
     header[5] = (unsigned char)pat.nrgb;
     header[12] = pat.w & 0xff;
@@ -220,56 +152,107 @@ void pat_write_tga(struct pattern pat, FILE *fp, unsigned int pxsz) {
 pat_getpx_func *pat_get_getpx_by_name(const char *name) {
     unsigned int i;
 
+    assert(name);
+
     for (i = 0; pat_getpx_funcs[i].getpx; ++i)
         if (strcmp(name, pat_getpx_funcs[i].name) == 0)
             return pat_getpx_funcs[i].getpx;
     return NULL;
 }
 
-int main(int argc, char *argv[]) {
-    struct pattern pat;
-    unsigned int pxsz;
-    char *env_seed = NULL, *env_getpx = NULL;
-    unsigned int seed;
+struct pat_context pat_ctx_new(enum pat_filefmt ffmt,
+                               unsigned int w,
+                               unsigned int h,
+                               unsigned int pxsz,
+                               const char *rgb_s[],
+                               unsigned int nrgb,
+                               unsigned int seed,
+                               const char *getpx_name,
+                               enum pat_flags f) {
+    struct pat_context ctx = {0};
     unsigned int i;
 
-    arg0 = argv[0];
-    if (argc < 5)
-        die("Usage: %s width height pixel_size 0xRRGGBB 0xRRGGBB... > output_file.tga\n"
-            "Environment variables:\n"
-            "  PXPAT_SEED (to be passed to srand)\n"
-            "  PXPAT_GETPX (default: pat_getpx)", arg0);
-    /* TODO: PXPAT_TILE */
-    env_seed = getenv_alloc("PXPAT_SEED");
-    env_getpx = getenv_alloc("PXPAT_GETPX");
-    seed = env_seed ? strtoul(env_seed, NULL, 10) : (unsigned int)time(NULL);
-    srand(seed);
-    ++argv;
-    pat.w = atoi(*argv++);
-    pat.h = atoi(*argv++);
-    pxsz = atoi(*argv++);
-    pat.nrgb = argc - 4;
-    if (pat.w <= 0 || pat.h <= 0 || pxsz <= 0 ||
-        pat.nrgb <= 0 || pat.nrgb > TGA_MAP_ENTRIES_MAX)
-        return EXIT_INVALID_PARAMETER;
-    pat.rgb = ecalloc(pat.nrgb, sizeof *pat.rgb);
-    if (env_getpx) {
-        pat.getpx = pat_get_getpx_by_name(env_getpx);
-        if (!pat.getpx)
-            pat.getpx = pat_getpx;
-    } else {
-        pat.getpx = pat_getpx;
+    assert(rgb_s);
+    assert(nrgb > 0);
+    assert(ffmt == PXPAT_FFMT_TGA);
+
+    if (w <= 0 || h <= 0 || pxsz <= 0) {
+        ctx.err = PXPAT_E_INVALID_PARAMETERS;
+        return ctx;
     }
-    for (i = 0; i < pat.nrgb; ++i) {
-        if (argv[i][0] == '#')
-            ++argv[i];
-        pat.rgb[i] = strtoul(argv[i], NULL, 16);
+    switch (ffmt) {
+    case PXPAT_FFMT_TGA:
+        if (nrgb > PXPAT_TGA_MAP_ENTRIES_MAX) {
+            ctx.err = PXPAT_E_MAP_ENTRIES_EXCEEDED;
+            return ctx;
+        }
+        break;
     }
-    pat_gen(&pat);
-    pat_write_tga(pat, stdout, pxsz);
-    free(pat.rgb);
-    free(pat.data);
-    free(env_seed);
-    free(env_getpx);
-    return EXIT_SUCCESS;
+
+    ctx.ffmt = ffmt;
+    ctx.pxsz = pxsz;
+    ctx.seed = seed;
+    ctx.pat.w = w;
+    ctx.pat.h = h;
+    ctx.pat.nrgb = nrgb;
+    ctx.pat.getpx = pat_getpx;
+    ctx.pat.f = f;
+
+    srand(ctx.seed);
+
+    if (getpx_name) {
+        ctx.pat.getpx = pat_get_getpx_by_name(getpx_name);
+        if (!ctx.pat.getpx)
+            ctx.pat.getpx = pat_getpx;
+    }
+
+    ctx.pat.rgb = ecalloc(ctx.pat.nrgb, sizeof *ctx.pat.rgb);
+    for (i = 0; i < ctx.pat.nrgb; ++i) {
+        if (rgb_s[i][0] == '#')
+            ++rgb_s[i];
+        ctx.pat.rgb[i] = strtoul(rgb_s[i], NULL, 16);
+    }
+
+    pat_gen(&ctx.pat);
+    return ctx;
+}
+
+void pat_ctx_write(struct pat_context *ctx, FILE *fp) {
+    assert(ctx);
+    assert(fp);
+    assert(ctx->ffmt == PXPAT_FFMT_TGA);
+
+    switch (ctx->ffmt) {
+    case PXPAT_FFMT_TGA:
+        pat_write_tga(ctx->pat, fp, ctx->pxsz);
+        break;
+    }
+}
+
+void pat_ctx_free(struct pat_context *ctx) {
+    if (!ctx)
+        return;
+    free(ctx->pat.rgb);
+    free(ctx->pat.data);
+}
+
+const char *pat_strerror(struct pat_context *ctx) {
+    static char unk[] = "Unknown error 0000";
+
+    assert(ctx);
+
+    switch (ctx->err) {
+    case 0:
+        return "Success";
+    case PXPAT_E_INVALID_PARAMETERS:
+        return "Some of the passed parameters are invalid";
+    case PXPAT_E_MAP_ENTRIES_EXCEEDED:
+        return "The number of colors exceeded the limit";
+    default:
+        if (ctx->err >= 0)
+            sprintf(unk + sizeof(unk) - 4, "%u", ctx->err % 1000);
+        else
+            sprintf(unk + sizeof(unk) - 5, "%u", ctx->err % 1000);
+        return unk;
+    }
 }
