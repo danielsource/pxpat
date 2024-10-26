@@ -46,13 +46,11 @@ pat_getpx_func *pat_get_getpx_by_name(const char *name);
 
 struct pat_context {
     struct pattern pat;
-    enum pat_filefmt ffmt;
     unsigned int pxsz, seed;
     enum pat_error err;
 };
 
-struct pat_context pat_ctx_new(enum pat_filefmt ffmt,
-                               unsigned int w,
+struct pat_context pat_ctx_new(unsigned int w,
                                unsigned int h,
                                unsigned int pxsz,
                                const char *rgb_s[],
@@ -60,6 +58,8 @@ struct pat_context pat_ctx_new(enum pat_filefmt ffmt,
                                unsigned int seed,
                                const char *getpx_name,
                                enum pat_flags f);
+void pat_ctx_write(struct pat_context *ctx, FILE *fp, enum pat_filefmt ffmt);
+void pat_ctx_free(struct pat_context *ctx);
 
 const char *pat_strerror(struct pat_context *ctx);
 

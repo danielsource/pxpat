@@ -160,8 +160,7 @@ pat_getpx_func *pat_get_getpx_by_name(const char *name) {
     return NULL;
 }
 
-struct pat_context pat_ctx_new(enum pat_filefmt ffmt,
-                               unsigned int w,
+struct pat_context pat_ctx_new(unsigned int w,
                                unsigned int h,
                                unsigned int pxsz,
                                const char *rgb_s[],
@@ -174,22 +173,12 @@ struct pat_context pat_ctx_new(enum pat_filefmt ffmt,
 
     assert(rgb_s);
     assert(nrgb > 0);
-    assert(ffmt == PXPAT_FFMT_TGA);
 
     if (w <= 0 || h <= 0 || pxsz <= 0) {
         ctx.err = PXPAT_E_INVALID_PARAMETERS;
         return ctx;
     }
-    switch (ffmt) {
-    case PXPAT_FFMT_TGA:
-        if (nrgb > PXPAT_TGA_MAP_ENTRIES_MAX) {
-            ctx.err = PXPAT_E_MAP_ENTRIES_EXCEEDED;
-            return ctx;
-        }
-        break;
-    }
 
-    ctx.ffmt = ffmt;
     ctx.pxsz = pxsz;
     ctx.seed = seed;
     ctx.pat.w = w;
@@ -217,13 +206,17 @@ struct pat_context pat_ctx_new(enum pat_filefmt ffmt,
     return ctx;
 }
 
-void pat_ctx_write(struct pat_context *ctx, FILE *fp) {
+void pat_ctx_write(struct pat_context *ctx, FILE *fp, enum pat_filefmt ffmt) {
     assert(ctx);
     assert(fp);
-    assert(ctx->ffmt == PXPAT_FFMT_TGA);
+    assert(ffmt == PXPAT_FFMT_TGA);
 
-    switch (ctx->ffmt) {
+    switch (ffmt) {
     case PXPAT_FFMT_TGA:
+        if (ctx->pat.nrgb > PXPAT_TGA_MAP_ENTRIES_MAX) {
+            ctx->err = PXPAT_E_MAP_ENTRIES_EXCEEDED;
+            return;
+        }
         pat_write_tga(ctx->pat, fp, ctx->pxsz);
         break;
     }

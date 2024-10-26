@@ -1,6 +1,6 @@
 @echo off
 
-set comp_flags=/nologo /std:c11 /Zi /Od /Wall /D_CRT_SECURE_NO_WARNINGS /wd5045 /wd4820
+set comp_flags=/nologo /std:c11 /Zi /Od /Wall /wd5045 /wd4820 /D_CRT_SECURE_NO_WARNINGS
 set link_flags=
 set root_dir=%cd%
 

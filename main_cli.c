@@ -1,3 +1,9 @@
+#ifndef PXPAT_VERSION
+#define PXPAT_VERSION "cli-indev"
+#endif
+
+#include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 #include "./pxpat.h"
@@ -14,22 +20,22 @@ static void cleanup(void) {
     free(env_getpx);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, const char *argv[]) {
     arg0 = argv[0];
 
-    if (atexit(cleanup))
+    if (atexit(cleanup) != 0)
         return 1;
 
     if (argc < 5)
-        die("Usage: %s width height pixel_size 0xRRGGBB 0xRRGGBB... > output_file.tga\n"
+        die("pxpat " PXPAT_VERSION "\n"
+            "Usage: %s width height pixel_size 0xRRGGBB 0xRRGGBB... > output_file.tga\n"
             "Environment variables:\n"
             "  PXPAT_SEED (to be passed to srand)\n"
             "  PXPAT_GETPX (default: pat_getpx)", arg0);
     env_seed = getenv_alloc("PXPAT_SEED");
     env_getpx = getenv_alloc("PXPAT_GETPX");
 
-    ctx = pat_ctx_new(PXPAT_FFMT_TGA,
-                      atoi(argv[1]),
+    ctx = pat_ctx_new(atoi(argv[1]),
                       atoi(argv[2]),
                       atoi(argv[3]),
                       argv + 4,
@@ -39,6 +45,8 @@ int main(int argc, char *argv[]) {
                       PXPAT_F_NONE);
     if (ctx.err)
         die("%s: %s", arg0, pat_strerror(&ctx));
-    pat_ctx_write(&ctx, stdout);
+    pat_ctx_write(&ctx, stdout, PXPAT_FFMT_TGA);
+    if (ctx.err)
+        die("%s: %s", arg0, pat_strerror(&ctx));
     return 0;
 }
