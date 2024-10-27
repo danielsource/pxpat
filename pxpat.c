@@ -6,17 +6,16 @@
 #include "./pxpat.h"
 #include "./pxpat_util.h"
 
-#define PAT_GETPX_FUNC(name) {#name, name}
+#define PAT_GETPX_FUNC(name) {#name, pat_getpx_##name}
 static struct {
     const char *name;
     pat_getpx_func *getpx;
 } pat_getpx_funcs[] = {
-    PAT_GETPX_FUNC(pat_getpx),
-    PAT_GETPX_FUNC(pat_getpx_simple_rand),
-    PAT_GETPX_FUNC(pat_getpx_grid),
-    PAT_GETPX_FUNC(pat_getpx_cycle_colors),
-    PAT_GETPX_FUNC(pat_getpx_checkpat),
-    PAT_GETPX_FUNC(pat_getpx_main_diag),
+    PAT_GETPX_FUNC(simple_rand),
+    PAT_GETPX_FUNC(grid),
+    PAT_GETPX_FUNC(cycle_colors),
+    PAT_GETPX_FUNC(checkpat),
+    PAT_GETPX_FUNC(main_diag),
     {NULL, NULL}
 };
 
@@ -30,7 +29,8 @@ unsigned char pat_getpx_simple_rand(struct pattern *pat, unsigned int pos) {
     return (unsigned char)(rand() % pat->nrgb);
 }
 
-static unsigned char pat_getpx_grid_(unsigned int x,
+static unsigned char pat_getpx_grid_(int tile,
+                                     unsigned int x,
                                      unsigned int y,
                                      unsigned int h,
                                      unsigned char bg, /* background color */
@@ -39,10 +39,12 @@ static unsigned char pat_getpx_grid_(unsigned int x,
     static const unsigned int rows = 32;
     const unsigned int cellsz = h/rows;
 
-    if (cellsz == 0)
-        return bg;
-    x %= cellsz;
-    y %= cellsz;
+    if (!tile) {
+        if (cellsz == 0)
+            return bg;
+        x %= cellsz;
+        y %= cellsz;
+    }
     if ((x == 1 && y == 0) ||
         (x == 0 && y == 1) ||
         (x == 1 && y == 1) ||
@@ -55,15 +57,18 @@ static unsigned char pat_getpx_grid_(unsigned int x,
 }
 
 unsigned char pat_getpx_grid(struct pattern *pat, unsigned int pos) {
+    int tile = 0;
     unsigned int x, y;
 
+    if (pat->f & PXPAT_F_TILE)
+        tile = 1;
     x = pos % pat->w;
     y = pos / pat->w;
     if (pat->nrgb < 2)
-        return pat_getpx_grid_(x, y, pat->h, 0, 0, 0);
+        return pat_getpx_grid_(tile, x, y, pat->h, 0, 0, 0);
     if (pat->nrgb == 2)
-        return pat_getpx_grid_(x, y, pat->h, 0, 1, 1);
-    return pat_getpx_grid_(x, y, pat->h, 0, 1, 2);
+        return pat_getpx_grid_(tile, x, y, pat->h, 0, 1, 1);
+    return pat_getpx_grid_(tile, x, y, pat->h, 0, 1, 2);
 }
 
 unsigned char pat_getpx_cycle_colors(struct pattern *pat, unsigned int pos) {

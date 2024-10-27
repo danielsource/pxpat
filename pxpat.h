@@ -21,7 +21,7 @@ typedef unsigned char pat_getpx_func(struct pattern *, unsigned int); /* returns
 
 enum pat_flags {
     PXPAT_F_NONE = 0,
-    PXPAT_F_TILE = 1 /* TODO: PXPAT_TILE */
+    PXPAT_F_TILE = 1
 };
 
 struct pattern {
