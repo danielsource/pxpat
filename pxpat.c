@@ -109,7 +109,8 @@ void pat_gen(struct pattern *pat) {
 }
 
 void pat_write_tga(struct pattern pat, FILE *fp, unsigned int pxsz) {
-    unsigned int i;
+    unsigned int i, j;
+    unsigned int iw, ih;
     unsigned char r, g, b;
 
     /* TGA data type 1: color-mapped images */
@@ -127,15 +128,17 @@ void pat_write_tga(struct pattern pat, FILE *fp, unsigned int pxsz) {
     };
 
     assert(fp);
-    assert(pxsz >= 1); /* TODO: pxsz support */
+    assert(pxsz >= 1);
     assert(pat.rgb);
     assert(pat.nrgb <= PXPAT_TGA_MAP_ENTRIES_MAX);
 
+    iw = pat.w * pxsz;
+    ih = pat.h * pxsz;
     header[5] = (unsigned char)pat.nrgb;
-    header[12] = pat.w & 0xff;
-    header[13] = (pat.w >> 8) & 0xff;
-    header[14] = pat.h & 0xff;
-    header[15] = (pat.h >> 8) & 0xff;
+    header[12] = iw & 0xff;
+    header[13] = (iw >> 8) & 0xff;
+    header[14] = ih & 0xff;
+    header[15] = (ih >> 8) & 0xff;
     header[17] |= 1 << 5; /* set top-left origin */
     fwrite(&header, sizeof header, 1, fp);
 
@@ -150,8 +153,9 @@ void pat_write_tga(struct pattern pat, FILE *fp, unsigned int pxsz) {
     }
 
     /* image data */
-    for (i = 0; i < pat.w * pat.h; ++i)
-        fputc(pat.data[i], fp);
+    for (i = 0; i < ih; ++i)
+        for (j = 0; j < iw; ++j)
+            fputc(pat.data[i/pxsz * pat.w + j/pxsz], fp);
 }
 
 pat_getpx_func *pat_get_getpx_by_name(const char *name) {

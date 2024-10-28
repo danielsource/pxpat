@@ -33,7 +33,7 @@ int main(int argc, const char *argv[]) {
         fprintf(stderr,
                 "pxpat " PXPAT_VERSION "\n"
                 "Usage: %s width height pixel_size 0xRRGGBB... > output.tga\n"
-                "Example: pxpat 1280 720 1 0xff0000 0x00ff00 0x0000ff > myfile.tga\n"
+                "Example: pxpat 320 180 4 0x963068 0xa2a9b0 0x100a0e > myfile.tga\n"
                 "Environment variables:\n"
                 "  PXPAT_SEED  : unsigned int (passed to srand, default: time(NULL))\n"
                 "  PXPAT_TILE  : boolean (true if set)\n"
