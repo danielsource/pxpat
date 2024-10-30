@@ -7,10 +7,7 @@
 #include "./pxpat_util.h"
 
 #define PAT_GETPX_FUNC(name) {#name, pat_getpx_##name}
-static struct {
-    const char *name;
-    pat_getpx_func *getpx;
-} pat_getpx_funcs[] = {
+const struct pat_getpx_func_table pat_getpx_funcs[] = {
     PAT_GETPX_FUNC(simple_rand),
     PAT_GETPX_FUNC(grid),
     PAT_GETPX_FUNC(cycle_colors),

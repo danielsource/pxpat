@@ -33,6 +33,13 @@ struct pattern {
     enum pat_flags f;
 };
 
+struct pat_getpx_func_table {
+    const char *name;
+    pat_getpx_func *getpx;
+};
+
+extern const struct pat_getpx_func_table pat_getpx_funcs[];
+
 unsigned char pat_getpx(struct pattern *pat, unsigned int pos);
 unsigned char pat_getpx_simple_rand(struct pattern *pat, unsigned int pos);
 unsigned char pat_getpx_grid(struct pattern *pat, unsigned int pos);

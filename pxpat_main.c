@@ -1,7 +1,3 @@
-#ifndef PXPAT_VERSION
-#define PXPAT_VERSION "cli-indev"
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -31,7 +27,6 @@ int main(int argc, const char *argv[]) {
 
     if (argc < 5) {
         fprintf(stderr,
-                "pxpat " PXPAT_VERSION "\n"
                 "Usage: %s width height pixel_size 0xRRGGBB... > output.tga\n"
                 "Example: pxpat 320 180 4 0x963068 0xa2a9b0 0x100a0e > myfile.tga\n"
                 "Environment variables:\n"

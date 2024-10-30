@@ -1,3 +1,1 @@
-Building using MSVC:
-> .\build_cli.bat
-> .\build\cli\pxpat.exe
+A simple CLI tool for generating pixel patterns in TGA format.
